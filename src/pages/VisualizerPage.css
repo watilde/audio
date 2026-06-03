@@ -1,0 +1,44 @@
+.viz-page {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+}
+
+.back-btn {
+  position: fixed;
+  top: 1.2rem;
+  left: 1.4rem;
+  padding: 0.4rem 1rem;
+  font-size: 0.72rem;
+  font-family: monospace;
+  letter-spacing: 0.12em;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(0,0,0,0.4);
+  color: rgba(255,255,255,0.4);
+  border-radius: 2rem;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  z-index: 20;
+  opacity: 0;
+  transition: opacity 0.3s, color 0.2s, border-color 0.2s;
+}
+
+.viz-page:hover .back-btn {
+  opacity: 1;
+}
+
+.back-btn:hover {
+  color: rgba(255,255,255,0.9);
+  border-color: rgba(255,255,255,0.4);
+}
+
+.viz-error {
+  position: fixed;
+  bottom: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: #f66;
+  z-index: 20;
+}
