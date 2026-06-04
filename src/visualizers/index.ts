@@ -1,3 +1,5 @@
+import { CrystalVisualizer } from './CrystalVisualizer'
+import { HallVisualizer } from './HallVisualizer'
 import { PaintVisualizer } from './PaintVisualizer'
 import { SumiVisualizer } from './SumiVisualizer'
 import { BreathVisualizer } from './BreathVisualizer'
@@ -11,6 +13,20 @@ import { VascularVisualizer } from './VascularVisualizer'
 import type { VisualizerDef } from './types'
 
 export const VISUALIZERS: VisualizerDef[] = [
+  {
+    id: 'hall',
+    name: 'HALL',
+    description: '奥へと続く無限の幻廊',
+    accent: '#e879f9',
+    component: HallVisualizer,
+  },
+  {
+    id: 'crystal',
+    name: 'CRYSTAL',
+    description: '光源とカメラで輝く3Dクリスタル',
+    accent: '#a78bfa',
+    component: CrystalVisualizer,
+  },
   {
     id: 'sumi',
     name: 'SUMI',
