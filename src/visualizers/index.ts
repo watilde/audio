@@ -10,9 +10,17 @@ import { NeuralVisualizer } from './NeuralVisualizer'
 import { AuroraVisualizer } from './AuroraVisualizer'
 import { BloomVisualizer } from './BloomVisualizer'
 import { VascularVisualizer } from './VascularVisualizer'
+import { FlockVisualizer } from './FlockVisualizer'
 import type { VisualizerDef } from './types'
 
 export const VISUALIZERS: VisualizerDef[] = [
+  {
+    id: 'flock',
+    name: 'FLOCK',
+    description: '3D空間を舞う極彩色の鳥の群れ',
+    accent: '#22d3ee',
+    component: FlockVisualizer,
+  },
   {
     id: 'hall',
     name: 'HALL',
