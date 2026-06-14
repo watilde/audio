@@ -15,13 +15,17 @@ const W_ALI = 1.0
 const W_COH = 0.9
 const W_BOUND = 1.4
 const W_FLEE = 2.2                // startle (flee-from-threat) steering weight
-const ONSET_THRESH = 0.06        // loudness jump that frightens the flock
+const ONSET_THRESH = 0.022       // loudness jump that frightens the flock (low ⇒ jumpy)
 
 interface Boid {
   x: number; y: number; z: number
   vx: number; vy: number; vz: number
   species: number
-  phase: number
+  phase: number       // current self-rotation angle (spun by spinRate each frame)
+  spinRate: number    // gentle per-bird axial spin, random sign & speed
+  size: number        // per-bird base-size multiplier so the flock varies in scale
+  fright: number   // per-bird adrenaline: only spooked birds bolt & decays alone
+  spin: number     // ambient-swirl direction (+1/−1); some birds counter-rotate
 }
 
 // HSL → 0xRRGGBB
@@ -160,7 +164,7 @@ export function FlockVisualizer({ width, height, onTick, isListening }: Visualiz
   const hueRef = useRef(200)
   const tRef = useRef(0)
   const prevLoudRef = useRef(0)                                  // smoothed loudness baseline
-  const startleRef = useRef({ s: 0, tx: 1.6, ty: 0, tz: 0 })     // fright strength + threat point
+  const startleRef = useRef({ cd: 0, tx: 1.6, ty: 0, tz: 0 })    // scare cooldown + threat point
 
   // Seed boids once (normalised space — independent of pixel size)
   if (boidsRef.current.length === 0) {
@@ -177,6 +181,10 @@ export function FlockVisualizer({ width, height, onTick, isListening }: Visualiz
         vz: (Math.random() - 0.5) * 0.01,
         species: i % SPECIES,
         phase: Math.random() * Math.PI * 2,
+        spinRate: (Math.random() - 0.5) * 0.024,   // gentle, random direction & rate
+        size: 0.45 + Math.random() * Math.random() * 1.7,   // most small, a few large
+        fright: 0,
+        spin: Math.random() < 0.2 ? -1 : 1,   // ~1 in 5 starts out counter-rotating
       }
     })
   }
@@ -200,7 +208,7 @@ export function FlockVisualizer({ width, height, onTick, isListening }: Visualiz
 
       const frames = makeShapeFrames()
       const pc = new ParticleContainer({
-        dynamicProperties: { position: true, scale: true, color: true, rotation: false },
+        dynamicProperties: { position: true, scale: true, color: true, rotation: true },
       })
       pcRef.current = pc
       app.stage.addChild(pc)
@@ -254,6 +262,15 @@ export function FlockVisualizer({ width, height, onTick, isListening }: Visualiz
     hueRef.current = (hueRef.current + 0.06 + mid * 0.35) % 360
     const baseHue = hueRef.current
 
+    // A soft key light that drifts slowly around the flock, so the lit side
+    // of the swarm shifts over time. Birds facing the light read brighter.
+    const lt = tRef.current
+    let lx = Math.cos(lt * 0.0035)
+    let ly = 0.45 * Math.sin(lt * 0.0023)
+    let lz = Math.sin(lt * 0.0035)
+    const ll = Math.hypot(lx, ly, lz) || 1
+    lx /= ll; ly /= ll; lz /= ll
+
     // Subtle reactive background
     app.renderer.background.color = hslHex(baseHue + 180, 0.5, 0.025 + volume * 0.03)
 
@@ -270,33 +287,60 @@ export function FlockVisualizer({ width, height, onTick, isListening }: Visualiz
       if (arr) arr.push(i); else grid.set(k, [i])
     }
 
-    // ── Startle reflex: a sudden rise in loudness frightens the flock ───────
+    // ── Startle reflex: a sudden rise in loudness spooks *part* of the flock ─
     // Detect a transient (onset) as loudness rising above its smoothed baseline.
+    // Rather than the whole flock bolting in unison, only a fraction of the
+    // birds nearest the threat panic and peel away; the rest glide on, so the
+    // sound visibly ripples through the flock instead of yanking all of it.
     const startle = startleRef.current
-    const loud = volume * 0.5 + bass * 0.5
+    const loud = volume * 0.5 + bass * 0.4 + high * 0.3
     const onset = loud - prevLoudRef.current
-    prevLoudRef.current = prevLoudRef.current * 0.6 + loud * 0.4
-    if (onset > ONSET_THRESH && startle.s < 0.35) {
-      // a fresh threat appears in a new random direction → the flock bolts away
+    // baseline tracks loudness loosely so even small transients poke above it
+    prevLoudRef.current = prevLoudRef.current * 0.78 + loud * 0.22
+    startle.cd = Math.max(0, startle.cd - 1)   // brief refractory gap between scares
+    if (onset > ONSET_THRESH && startle.cd === 0) {
+      // a fresh threat appears in a new random direction
       const th = Math.random() * Math.PI * 2
       const ph = Math.acos(2 * Math.random() - 1)
       startle.tx = Math.sin(ph) * Math.cos(th) * 1.6
       startle.ty = Math.sin(ph) * Math.sin(th) * 1.6
       startle.tz = Math.cos(ph) * 1.6
-      startle.s = Math.min(1, onset * 7)
+      startle.cd = 3                            // recover fast ⇒ rapid re-triggering
+      const strength = Math.min(1, 0.3 + onset * 12)
+      // even soft transients spook a wide patch; loud ones nearly the whole flock
+      const spookR2 = (0.7 + Math.min(1.3, onset * 9)) ** 2
+      for (let i = 0; i < N; i++) {
+        const b = boids[i]
+        // birds closest to where the threat appeared are the ones that startle
+        const dx = b.x - startle.tx, dy = b.y - startle.ty, dz = b.z - startle.tz
+        const d2 = dx * dx + dy * dy + dz * dz
+        if (d2 < spookR2 && Math.random() < 0.85) {
+          b.fright = Math.max(b.fright, strength)
+          // many don't just veer — they panic-bolt, instantly reversing course
+          // and shooting straight away from the sound
+          if (Math.random() < 0.55) {
+            const inv = 1 / Math.sqrt(d2 + 1e-9)
+            const burst = BASE_SPEED * (4 + onset * 9)
+            b.vx = dx * inv * burst
+            b.vy = dy * inv * burst
+            b.vz = dz * inv * burst
+          }
+        }
+      }
     }
-    startle.s *= 0.93   // adrenaline fades; the flock settles back into a glide
-    const fright = startle.s
 
-    // startled birds briefly fly faster and turn harder (sharper steering)
-    const maxSpeed = BASE_SPEED * (0.7 + volume * 1.0 + bass * 0.7 + fright * 2.4)
+    const baseSpeed = BASE_SPEED * (0.7 + volume * 1.7 + bass * 1.1)
+    const baseForce = MAX_FORCE * (1 + bass * 2.4 + mid * 1.2)
     const sep2 = SEP_R * SEP_R
     const nb2 = NEIGHBOR_R * NEIGHBOR_R
 
-    const maxForce = MAX_FORCE * (1 + bass * 1.5 + fright * 7)
-
     for (let i = 0; i < N; i++) {
       const b = boids[i]
+      // each bird carries its own adrenaline: only the spooked ones fly faster
+      // and turn harder, so the panic stays local to part of the flock
+      const fright = b.fright
+      const maxSpeed = baseSpeed * (1 + fright * 3.6)   // bolters keep their burst speed
+      const maxForce = baseForce * (1 + fright * 7)
       // Reynolds accumulators
       let sepx = 0, sepy = 0, sepz = 0          // separation desired (away)
       let alix = 0, aliy = 0, aliz = 0          // alignment: Σ neighbour velocity
@@ -357,8 +401,11 @@ export function FlockVisualizer({ width, height, onTick, isListening }: Visualiz
         accx += s[0] * wf; accy += s[1] * wf; accz += s[2] * wf
       }
 
-      // Ambient: a faint tangential swirl keeps the calm flock alive
-      const swirl = 0.0001 + mid * 0.0002
+      // Ambient: a faint tangential swirl keeps the calm flock alive. Each bird
+      // carries its own spin sign, and every so often an individual flips it —
+      // so a few stragglers wheel around the other way against the drift.
+      if (Math.random() < 3e-5) b.spin *= -1
+      const swirl = (0.0001 + mid * 0.0002) * b.spin
       accx += -b.z * swirl
       accz += b.x * swirl
 
@@ -368,6 +415,7 @@ export function FlockVisualizer({ width, height, onTick, isListening }: Visualiz
       if (sp > maxSpeed) { const k = maxSpeed / sp; b.vx *= k; b.vy *= k; b.vz *= k }
 
       b.x += b.vx; b.y += b.vy; b.z += b.vz
+      b.fright *= 0.93   // this bird's adrenaline fades; it settles back into a glide
 
       // ── Project to screen ────────────────────────────────────────────────
       // rotate around Y then X
@@ -385,13 +433,20 @@ export function FlockVisualizer({ width, height, onTick, isListening }: Visualiz
 
       const depth = (persp - fov / (fov + 1)) / (fov / (fov - 1) - fov / (fov + 1))
       const energy = b.species % 2 === 0 ? bass + mid : mid + high
-      const pulse = 1 + energy * 0.35
-      const sc = persp * (0.05 + energy * 0.05) * pulse * (Math.min(w, h) / 900 + 0.45)
+      const pulse = 1 + energy * 0.6 + fright * 0.5
+      const sc = persp * (0.05 + energy * 0.05) * pulse * b.size * (Math.min(w, h) / 900 + 0.45)
       p.scaleX = sc
       p.scaleY = sc
 
+      // gentle self-rotation: each bird slowly turns on its own axis
+      b.phase += b.spinRate
+      p.rotation = b.phase
+
+      // Lambert term against the drifting key light (r ≈ |position|, so this
+      // is the position direction · light direction): the lit side glows.
+      const lambert = 0.5 + 0.5 * (b.x * lx + b.y * ly + b.z * lz) / r
       const hue = baseHue + b.species * (300 / SPECIES) + rz * 30
-      p.tint = hslHex(hue, 0.78, 0.55 + energy * 0.2)
+      p.tint = hslHex(hue, 0.78, 0.38 + lambert * 0.32 + energy * 0.2 + fright * 0.3)   // lit side + spooked birds flash brighter
       p.alpha = 0.5 + depth * 0.5   // far spheres fade into the dark
     }
 
