@@ -26,7 +26,12 @@ interface Boid {
   size: number        // per-bird base-size multiplier so the flock varies in scale
   fright: number   // per-bird adrenaline: only spooked birds bolt & decays alone
   spin: number     // ambient-swirl direction (+1/−1); some birds counter-rotate
+  crazy: boolean   // a handful of mad birds that stay vividly colourful always
 }
+
+// A few permanently "crazed" birds, scattered through the flock, that always
+// render in colour while the calm flock around them stays monotone.
+const CRAZY = 6
 
 // HSL → 0xRRGGBB
 function hslHex(h: number, s: number, l: number): number {
@@ -185,6 +190,7 @@ export function FlockVisualizer({ width, height, onTick, isListening }: Visualiz
         size: 0.45 + Math.random() * Math.random() * 1.7,   // most small, a few large
         fright: 0,
         spin: Math.random() < 0.2 ? -1 : 1,   // ~1 in 5 starts out counter-rotating
+        crazy: i < CRAZY,                      // first few birds are the mad, colourful ones
       }
     })
   }
@@ -446,7 +452,14 @@ export function FlockVisualizer({ width, height, onTick, isListening }: Visualiz
       // is the position direction · light direction): the lit side glows.
       const lambert = 0.5 + 0.5 * (b.x * lx + b.y * ly + b.z * lz) / r
       const hue = baseHue + b.species * (300 / SPECIES) + rz * 30
-      p.tint = hslHex(hue, 0.78, 0.38 + lambert * 0.32 + energy * 0.2 + fright * 0.3)   // lit side + spooked birds flash brighter
+      // The calm flock is monotone (saturation 0 ⇒ pure greyscale). The handful
+      // of permanently-crazed birds always burn full colour; everyone else only
+      // bleeds into colour while panicking, draining back to grey as fright
+      // decays — so colour ripples through the flock and fades.
+      const sat = b.crazy ? 0.95 : Math.min(0.9, fright * 1.6)
+      // give the mad birds their own fast-cycling, vivid hue so they pop
+      const ch = b.crazy ? hue + tRef.current * 1.5 : hue
+      p.tint = hslHex(ch, sat, 0.38 + lambert * 0.32 + energy * 0.2 + fright * 0.3)   // lit side + spooked & crazed birds flash brighter
       p.alpha = 0.5 + depth * 0.5   // far spheres fade into the dark
     }
 
