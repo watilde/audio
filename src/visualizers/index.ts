@@ -13,9 +13,17 @@ import { VascularVisualizer } from './VascularVisualizer'
 import { FlockVisualizer } from './FlockVisualizer'
 import { GlazeVisualizer } from './GlazeVisualizer'
 import { DonutVisualizer } from './DonutVisualizer'
+import { HanabiVisualizer } from './HanabiVisualizer'
 import type { VisualizerDef } from './types'
 
 export const VISUALIZERS: VisualizerDef[] = [
+  {
+    id: 'hanabi',
+    name: 'HANABI',
+    description: '3Dの花が咲き、音で花火が炸裂する',
+    accent: '#fb7185',
+    component: HanabiVisualizer,
+  },
   {
     id: 'donut',
     name: 'DONUT',
