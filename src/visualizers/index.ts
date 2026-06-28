@@ -12,9 +12,17 @@ import { BloomVisualizer } from './BloomVisualizer'
 import { VascularVisualizer } from './VascularVisualizer'
 import { FlockVisualizer } from './FlockVisualizer'
 import { GlazeVisualizer } from './GlazeVisualizer'
+import { DonutVisualizer } from './DonutVisualizer'
 import type { VisualizerDef } from './types'
 
 export const VISUALIZERS: VisualizerDef[] = [
+  {
+    id: 'donut',
+    name: 'DONUT',
+    description: '艶めくドーナツが回り、スプリンクルが弾ける',
+    accent: '#f472b6',
+    component: DonutVisualizer,
+  },
   {
     id: 'glaze',
     name: 'GLAZE',
