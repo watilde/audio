@@ -11,9 +11,17 @@ import { AuroraVisualizer } from './AuroraVisualizer'
 import { BloomVisualizer } from './BloomVisualizer'
 import { VascularVisualizer } from './VascularVisualizer'
 import { FlockVisualizer } from './FlockVisualizer'
+import { GlazeVisualizer } from './GlazeVisualizer'
 import type { VisualizerDef } from './types'
 
 export const VISUALIZERS: VisualizerDef[] = [
+  {
+    id: 'glaze',
+    name: 'GLAZE',
+    description: '照りと焼き目、滴るみずみずしい果実',
+    accent: '#fb7185',
+    component: GlazeVisualizer,
+  },
   {
     id: 'flock',
     name: 'FLOCK',
